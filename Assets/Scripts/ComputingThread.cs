@@ -13,8 +13,8 @@ public class ComputingThread {
     public static AutoResetEvent[] writeReady;
 
     //azok az eventek, amikre a thread-ek várnak
-    public static AutoResetEvent startReading = new AutoResetEvent(false);
-    public static AutoResetEvent statWriting = new AutoResetEvent(false);
+    public static ManualResetEvent startReading = new ManualResetEvent(false);
+    public static ManualResetEvent startWriting = new ManualResetEvent(false);
 
     public ComputingThread(int size)
     {
@@ -29,6 +29,8 @@ public class ComputingThread {
         for (int i = 0; i < total; i++)
         {
             threads[i] = new Thread(this.ComputeGeneration);
+            readAndComputeReady[i] = new AutoResetEvent(false);
+            writeReady[i] = new AutoResetEvent(false);
         }
     }
 
@@ -42,6 +44,23 @@ public class ComputingThread {
 
     public void ComputeGeneration(object num)
     {
-        Debug.Log((int)num + ". thread started");
+        int index = (int)num;
+        // olvasási és számolási feladatok
+        Debug.Log(index + ". thread started");
+
+        readAndComputeReady[index].Set();
+
+        Debug.Log(index + ". thread set its read event");
+
+        startWriting.WaitOne();
+        // itt kezdõdik az írási szakasz
+
+        Debug.Log(index + ". thread starts to write");
+
+        writeReady[index].Set();
+        Debug.Log(index + ". thread write end");
+
+        startReading.WaitOne();
+        Debug.Log(index + ".thread terminates");
     }
 }
