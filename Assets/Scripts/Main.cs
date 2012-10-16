@@ -26,7 +26,7 @@ public class Main : MonoBehaviour {
 	
 	// Update is called once per frame
 	void Update () {
-	
+        
 	}
 
     // ennek majd egy IEnumeratorban kell lennie, mert hívni fogunk belõle egy
@@ -34,31 +34,49 @@ public class Main : MonoBehaviour {
     // yield-et kell használni
     private IEnumerator Compute()
     {
-        ComputingThread ct = new ComputingThread(3);
-        ct.StartThreads();
+        this.ct.StartThreads();
+
         Debug.Log("MAIN Started");
-
+        //Debug.Break();
         //ciklus eleje
+        
+            //WaitHandle.WaitAll(ct.readAndComputeReady);
+            //Debug.Log("MAIN Waited all readAndCompute, G");
+            ////itt reseteljük a readinget, amit az elõzõ ciklus végén seteltünk, mert itt az összes háttér szál várakozik
+            //ct.startReading.Reset();
 
-        WaitHandle.WaitAll(ct.readAndComputeReady);
-        Debug.Log("MAIN Waited all readAndCompute");
-        //itt reseteljük a readinget, amit az elõzõ ciklus végén seteltünk, mert itt az összes háttér szál várakozik
-        ct.startReading.Reset();
+            //ct.startWriting.Set();
+            //Debug.Log("MAIN Start writing");
+            //Debug.Break();
+            //WaitHandle.WaitAll(ct.writeReady);
+            //Debug.Log("MAIN waited all write");
+            //// itt kell megcsinálni a resetet, mivel itt az összes többi szál várakozik
+            //ct.startWriting.Reset();
 
-        ct.startWriting.Set();
-        Debug.Log("MAIN Start writing");
+            ////ide kell majd az a kód, ami átállítja a GameObject-eket
+            ////this.RefreshCubes(this.size, this.ct.values);
+            ////teszt
+            //string debug = g+". Debug value\n";
+            //for (int i = 0; i < this.size; i++)
+            //{
+            //    debug += i.ToString() + " plane\n";
+            //    for (int j = 0; j < this.size; j++)
+            //    {
+            //        for (int k = 0; k < this.size; k++)
+            //            debug += this.ct.values[i, j, k];
+            //        debug += "\n";
+            //    }
+            //    debug += "\n";
+            //}
+            //Debug.Log(debug);
 
-        WaitHandle.WaitAll(ct.writeReady);
-        Debug.Log("MAIN waited all write");
-        // itt kell megcsinálni a resetet, mivel itt az összes többi szál várakozik
-        ct.startWriting.Reset();
+            ////yield return new WaitForSeconds(1f);
 
-        //ide kell majd az a kód, ami átállítja a GameObject-eket
-
-        ct.startReading.Set();
-        Debug.Log("MAIN Start reading");
+            //ct.startReading.Set();
+            //Debug.Log("MAIN Start reading");
+        
         // ciklus vége
-        yield return null;
+        return null;
     }
 
     // ez gyártja le a kockákat, amiket megjelenítünk
@@ -111,5 +129,27 @@ public class Main : MonoBehaviour {
         }
 
         return cubeArray;
+    }
+
+    private void RefreshCubes(int size, int[, ,] values)
+    {
+        for (int i = 0; i < size; i++)
+        {
+            for (int j = 0; j < size; j++)
+            {
+                for (int k = 0; k < size; k++)
+                {
+                    this.cubes[i,j,k].renderer.enabled = (values[i, j, k] == 1);
+                }
+            }
+        }
+    }
+
+    void OnGUI()
+    {
+        if (GUI.Button(new Rect(10,10,200,200), "Start"))
+        {
+            this.StartCoroutine("Compute");
+        }
     }
 }
