@@ -11,17 +11,19 @@ public class Main : MonoBehaviour {
         Debug.Log("MAIN Started");
 
         //ciklus eleje
-        ComputingThread.startReading.Reset();
-        ComputingThread.startWriting.Reset();
 
         WaitHandle.WaitAll(ComputingThread.readAndComputeReady);
         Debug.Log("MAIN Waited all readAndCompute");
+        //itt reseteljük a readinget, amit az elõzõ ciklus végén seteltünk, mert itt az összes háttér szál várakozik
+        ComputingThread.startReading.Reset();
 
         ComputingThread.startWriting.Set();
         Debug.Log("MAIN Start writing");
 
         WaitHandle.WaitAll(ComputingThread.writeReady);
         Debug.Log("MAIN waited all write");
+        // itt kell megcsinálni a resetet, mivel itt az összes többi szál várakozik
+        ComputingThread.startWriting.Reset();
 
         //ide kell majd az a kód, ami átállítja a GameObject-eket
 
