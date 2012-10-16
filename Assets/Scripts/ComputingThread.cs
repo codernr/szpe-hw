@@ -4,21 +4,21 @@ using System.Threading;
 
 public class ComputingThread {
 
-    public static int[, ,] values;
+    public int[, ,] values;
 
-    public static Thread[] threads;
+    public Thread[] threads;
 
     //thread-ek jelzõ eventjei
-    public static AutoResetEvent[] readAndComputeReady;
-    public static AutoResetEvent[] writeReady;
+    public AutoResetEvent[] readAndComputeReady;
+    public AutoResetEvent[] writeReady;
 
     //azok az eventek, amikre a thread-ek várnak
-    public static ManualResetEvent startReading = new ManualResetEvent(false);
-    public static ManualResetEvent startWriting = new ManualResetEvent(false);
+    public ManualResetEvent startReading = new ManualResetEvent(false);
+    public ManualResetEvent startWriting = new ManualResetEvent(false);
 
     public ComputingThread(int size)
     {
-        values = new int[size, size, size];
+        values = this.GenerateRandomValues(size);
 
         //teszt
         int total = size * size * size;
@@ -62,5 +62,24 @@ public class ComputingThread {
 
         startReading.WaitOne();
         Debug.Log(index + ".thread terminates");
+    }
+
+    // visszaad egy véletlen 1/0 értékekkel feltöltött 3D int tömböt
+    private int[, ,] GenerateRandomValues(int size)
+    {
+        int[, ,] ret = new int[size, size, size];
+
+        for (int i = 0; i < size; i++)
+        {
+            for (int j = 0; j < size; j++)
+            {
+                for (int k = 0; k < size; k++)
+                {
+                    ret[i, j, k] = Random.Range(0, 1);
+                }
+            }
+        }
+
+        return ret;
     }
 }
