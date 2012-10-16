@@ -94,6 +94,9 @@ public class Main : MonoBehaviour {
                     cube.renderer.material.shader = Shader.Find("Transparent/VertexLit");
                     cube.renderer.material.color = new Color((float)k / (float)size, (float)j / (float)size, (float)i / (float)size, 0.7f);
 
+                    // ha nem 0 tartozik a kockához, akkor láthatatlan
+                    cube.renderer.enabled = (values[i, j, k] == 1);
+
                     // méretezzük és a helyére tesszük a kockát
                     cube.transform.localScale = new Vector3(cubeSize, cubeSize, cubeSize);
                     cube.transform.position = startPos + new Vector3(i * cubeSize, j * cubeSize, k * cubeSize);

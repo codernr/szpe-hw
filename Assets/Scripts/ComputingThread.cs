@@ -18,7 +18,7 @@ public class ComputingThread {
 
     public ComputingThread(int size)
     {
-        values = this.GenerateRandomValues(size);
+        this.values = this.GenerateRandomValues(size);
 
         //teszt
         int total = size * size * size;
@@ -75,7 +75,7 @@ public class ComputingThread {
             {
                 for (int k = 0; k < size; k++)
                 {
-                    ret[i, j, k] = Random.Range(0, 1);
+                    ret[i, j, k] = Random.Range(0, 2);
                 }
             }
         }
