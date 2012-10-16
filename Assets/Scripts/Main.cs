@@ -5,7 +5,7 @@ using System.Threading;
 public class Main : MonoBehaviour {
 
     // a 3D kocka élmérete, amiben a játék folyik
-    public int size = 4;
+    public int size = 10;
 
     // a tér nagysága, amiben a kockákat elhelyezzük
     public float space = 10f;
@@ -67,6 +67,9 @@ public class Main : MonoBehaviour {
     {
         GameObject[,,] cubeArray = new GameObject[size, size, size];
 
+        // ez alá tesszük a kockákat, hogy az inspectorban áttekinthetõ legyen
+        Transform parent = GameObject.Find("Parent").transform;
+
         // kiszámoljuk, mekkora lehet egy kocka, hogy beleférjenek az adott térbe
         float cubeSize = space / (float)size;
 
@@ -88,6 +91,7 @@ public class Main : MonoBehaviour {
                 {
                     // létrehozzuk fizikailag a kockát
                     GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    cube.transform.parent = parent;
 
                     // beállítunk nekik egy kicsit átlátszó, a teljes sokaság egyik sarkától a másikig
                     // feketébõl fehérbe átmenõ színt
