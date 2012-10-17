@@ -13,20 +13,28 @@ public class Main : MonoBehaviour {
     // hány generációig fusson a program
     public int generation = 10;
 
+    // állapotjelzõ flagek
+    private bool loading = false;
     private bool running = false;
 
-    // a kockákat tároló tömb
-    private GameObject[, ,] cubes;
+    // egyes kockák animációját irányító esemény
+    public delegate void StartAnimation();
+    public event StartAnimation starterEvent;
+
+    // animáció idõtartama
+    public float animationDuration = 0.3f;
+    // két generáció közt eltelt idõ (!! nagyobbnak kell lennie mint az animációnak)
+    public float generationDuration = 1f;
     
     // annak az objektumnak a referenciája, amibõl a szálakat indítjuk
-    private ComputingThread ct;
+    public ComputingThread ct;
     
     // Unity3d event, az induláskor van meghívva minden GameObject-hez csatolt scripten
 	public void Start ()
     {
         this.ct = new ComputingThread(this.size);
 
-        this.cubes = this.GenerateCubes(this.size, this.space, this.ct.values);
+        this.StartCoroutine(this.GenerateCubes(this.size, this.space, this.ct.values));
 	}
 	
 	// Update is called once per frame
@@ -47,17 +55,24 @@ public class Main : MonoBehaviour {
 
     private IEnumerator NewGeneration()
     {
-        this.RefreshCubes(this.size, this.ct.values);
-        yield return new WaitForSeconds(1f);
+       if (this.starterEvent != null)
+        {
+            this.starterEvent();
+        }
+
+        yield return new WaitForSeconds(this.generationDuration);
         this.ct.StartThreads();
     }
 
     // ez gyártja le a kockákat, amiket megjelenítünk
     // amelyiknél 0-t kell megjeleníteni, azt láthatatlanná tesszük
-    private GameObject[,,] GenerateCubes(int size, float space, int[,,] values)
+    private IEnumerator GenerateCubes(int size, float space, int[,,] values)
     {
+        this.loading = true;
+
         GameObject[,,] cubeArray = new GameObject[size, size, size];
 
+        // a GPU azokat a textúrákat kezeli hatékonyan, amelyek 2 hatvány szélességû/hosszúságúak
         int tw = Mathf.NextPowerOfTwo(this.size * this.size);
         int th = Mathf.NextPowerOfTwo(this.size);
         Texture2D tex = this.CreateTexture(tw, th);
@@ -90,6 +105,8 @@ public class Main : MonoBehaviour {
                     GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     cube.transform.parent = parent;
 
+                    cube.AddComponent<CubeAnimation>().Initialize(this, i, j, k);
+
                     // minden kocka ugyanazt a materialt használja, így lecsökken a draw call-ok száma
                     cube.renderer.sharedMaterial = material;
                     Mesh mesh = cube.GetComponent<MeshFilter>().mesh;
@@ -105,10 +122,10 @@ public class Main : MonoBehaviour {
 
                     cubeArray[i, j, k] = cube;
                 }
+                yield return null;
             }
         }
-
-        return cubeArray;
+        this.loading = false;
     }
 
     // generálunk egy textúrát, ami colorpickerként fog mûködni az egyes kockák színeihez
@@ -154,26 +171,19 @@ public class Main : MonoBehaviour {
         return uvs;
     }
 
-    private void RefreshCubes(int size, int[, ,] values)
-    {
-        for (int i = 0; i < size; i++)
-        {
-            for (int j = 0; j < size; j++)
-            {
-                for (int k = 0; k < size; k++)
-                {
-                    this.cubes[i,j,k].renderer.enabled = (values[i, j, k] == 1);
-                }
-            }
-        }
-    }
-
     void OnGUI()
     {
-        if (GUI.Button(new Rect(10,10,200,200), "Start") && !this.running)
+        if (!this.running && !this.loading)
         {
-            this.running = true;
-            this.ct.StartThreads();
+            if (GUI.Button(new Rect(10, 10, 50, 20), "Start"))
+            {
+                this.running = true;
+                this.ct.StartThreads();
+            }
+        }
+        if (this.loading)
+        {
+            GUI.Label(new Rect(10, 10, 100, 20), "Betöltés...");
         }
     }
 }
