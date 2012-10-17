@@ -14,8 +14,8 @@ public class Main : MonoBehaviour {
     public int generation = 10;
 
     // állapotjelzõ flagek
-    private bool loading = false;
-    private bool running = false;
+    public bool loading = false;
+    public bool running = false;
 
     // egyes kockák animációját irányító esemény
     public delegate void StartAnimation();
@@ -81,6 +81,7 @@ public class Main : MonoBehaviour {
 
         // ez alá tesszük a kockákat, hogy az inspectorban áttekinthetõ legyen
         Transform parent = GameObject.Find("Parent").transform;
+        parent.GetComponent<ParentAnimation>().Initialize(this);
 
         // kiszámoljuk, mekkora lehet egy kocka, hogy beleférjenek az adott térbe
         float cubeSize = space / (float)size;

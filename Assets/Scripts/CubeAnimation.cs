@@ -25,6 +25,13 @@ public class CubeAnimation : MonoBehaviour {
     {
         if (this.renderer.enabled == (this.main.ct.values[i, j, k] == 1)) yield break;
 
+        // 1000 kocka fölött már nem animálunk!
+        if (this.main.size > 10)
+        {
+            this.renderer.enabled = (this.main.ct.values[i, j, k] == 1);
+            yield break;
+        }
+
         float dur = this.main.animationDuration;
         float time = 0;
         float scale = this.transform.localScale.x;
