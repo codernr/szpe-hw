@@ -90,8 +90,10 @@ public class Main : MonoBehaviour {
                     GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     cube.transform.parent = parent;
 
+                    // minden kocka ugyanazt a materialt használja, így lecsökken a draw call-ok száma
                     cube.renderer.sharedMaterial = material;
                     Mesh mesh = cube.GetComponent<MeshFilter>().mesh;
+                    // beállítjuk, hogy a material colorpicker-ként funkcionáló textúrájának megfelelõ pixelével legyen szaínezve
                     mesh.uv = this.GenerateUV(mesh.vertexCount, tw, th, i, j, k);
 
                     // ha nem 0 tartozik a kockához, akkor láthatatlan
@@ -128,6 +130,7 @@ public class Main : MonoBehaviour {
             }
         }
 
+        tex.filterMode = FilterMode.Point;
         tex.Apply();
         return tex;
     }
