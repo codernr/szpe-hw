@@ -4,55 +4,94 @@ using System.Threading;
 
 public class ComputingThread {
 
+    // ebben tároljuk a tényleges tömböt, amiben az 1-0-k vannak
     public int[, ,] values;
 
     private int size;
 
     private object lockObject = new Object();
 
+    // a szálakat tároló tömb
     public Thread[] threads;
+    public int threadCount = 4;
+
+    // az a tömb, ami azt tárolja, hogy melyik szálnak milyen adattartománnyal kell foglalkoznia
+    // a values tömb linearizált indextartományát és offsetjét tárolja thread-enként
+    // [threadCount, 2] forma: azt tárolja, hogy melyik thread hol kezdje és meddig az adatok feldolgozását
+    // pl. decomposedValues[0] = {0, 100} : a 0-dik thread a values tömb elsõ 100 elemével foglalkozik
+    private int[,] decomposedValues;
 
     //thread-ek jelzõ eventjei
     public AutoResetEvent[] readAndComputeReady;
     public AutoResetEvent[] writeReady;
 
     //azok az eventek, amikre a thread-ek várnak
-    public ManualResetEvent startReading = new ManualResetEvent(false);
     public ManualResetEvent startWriting = new ManualResetEvent(false);
+
+    // flag, amit a unity-s szál folyamatosan pollingol, hogy kész-e a számítás
+    private bool _threadComputeReady;
+    public bool threadComputeReady
+    {
+        get {
+            bool ret;
+            lock (lockObject) {
+                ret = _threadComputeReady;
+            }
+            return ret;
+        }
+
+        set {
+            lock (lockObject) {
+                _threadComputeReady = value;
+            }
+        }
+    }
 
     // szabályok az itt leírtak szerint: http://www.ibiblio.org/e-notes/Life/Game.htm
     // "a new ball will appear if the number of neighbors (Sum) is equal or more than r1 and equal or less than r2. 
     // a ball will die if the Sum is more than r3 or less than r4."
     //   if ( (L[p]==0)&&(Sum[i][j][k]>=r1)&&(Sum[i][j][k]<=r2) ) L[p]=1;
     //   else if ( (L[p]!=0)&&((Sum[i][j][k]>r3)||(Sum[i][j][k]<r4)) ) L[p]=0;
-    private int[] rules = new int[4] { 5, 5, 7, 7 };
+    private int[] rules = new int[4] { 5, 5, 13, 7 };
 
+    // konstruktor
     public ComputingThread(int size)
     {
-        this.values = this.GenerateRandomValues(size);
-
         this.size = size;
 
-        int total = size * size * size;
-        this.threads = new Thread[total];
-        this.readAndComputeReady = new AutoResetEvent[total];
-        this.writeReady = new AutoResetEvent[total];
+        this.GenerateRandomValues();
 
-        for (int i = 0; i < total; i++)
+        this.DecomposeData();
+
+        int total = size * size * size;
+
+        this.threads = new Thread[this.threadCount];
+        this.readAndComputeReady = new AutoResetEvent[this.threadCount];
+        this.writeReady = new AutoResetEvent[this.threadCount];
+
+        for (int i = 0; i < this.threadCount; i++)
         {
-            this.threads[i] = new Thread(this.ComputeGeneration);
             this.readAndComputeReady[i] = new AutoResetEvent(false);
             this.writeReady[i] = new AutoResetEvent(false);
         }
     }
 
+    // ez egy külön thread, ami további thread-eket indít, amelyek valójában számolnak
     public void StartThreads()
     {
         for (int i = 0; i < threads.Length; i++)
         {
-            Debug.Log("Starting " + i + ".thread");
-            threads[i].Start(i);
+            this.threads[i] = new Thread(this.ComputeGeneration);
+            this.threads[i].Start(i);
         }
+
+        WaitHandle.WaitAll(this.readAndComputeReady);
+        this.startWriting.Set();
+
+        WaitHandle.WaitAll(this.writeReady);
+        this.startWriting.Reset();
+
+        this.threadComputeReady = true;
     }
 
     public void ComputeGeneration(object num)
@@ -60,62 +99,81 @@ public class ComputingThread {
         int index = (int)num;
         // olvasási és számolási feladatok
 
-        // visszafejtjük a sorszámból a 3D vektort
-        int i = index / (this.size * this.size);
-        int j = index / this.size;
-        int k = index % this.size;
+        int offset = this.decomposedValues[index, 0];
+        int length = this.decomposedValues[index, 1];
 
-        Debug.Log(index + ". thread: [" + i + "," + j + "," + k + "] kocka");
+        int[] actualValue = new int[length];
+        int[][] indices = new int[length][];
 
-        // ide majd a generációk száma jön, egyelõre hardcode
-        Debug.Log("#" + index + "-1 debug");
-            int actualValue = this.values[i, j, k];
-            int sum = this.Sum(i, j, k);
-            Debug.Log("#" + index + "-2 debug");
-            if (actualValue == 0)
+        for (int i = 0; i < length; i++)
+        {
+            indices[i] = this.Get3DIndex(i+offset, this.size);
+
+            actualValue[i] = this.values[indices[i][0], indices[i][1], indices[i][2]];
+
+            int sum = this.Sum(indices[i][0], indices[i][1], indices[i][2]);
+
+            if (actualValue[i] == 0)
             {
-                if (sum >= this.rules[0] && sum <= this.rules[1]) actualValue = 1;
+                if (sum >= this.rules[0] && sum <= this.rules[1]) actualValue[i] = 1;
             }
             else
             {
-                if (sum >= this.rules[2] || sum <= this.rules[3]) actualValue = 0;
-            }
-            Debug.Log("#" + index + "-3 debug");
-            //Debug.Log(">>>" + index + ". thread val:" + this.values[i, j, k]);
-            //Debug.Log(">>>" + index + ". thread nextval:" + actualValue);
-
-            
-            //readAndComputeReady[index].Set();
-
-            //startWriting.WaitOne();
-            //// itt kezdõdik az írási szakasz
-            //Debug.Log(">>>"+index + ". thread nextval:" + actualValue);
-
-            //this.values[i, j, k] = actualValue;
-
-            //writeReady[index].Set();
-
-            //startReading.WaitOne();
-        
-    }
-
-    // visszaad egy véletlen 1/0 értékekkel feltöltött 3D int tömböt
-    private int[, ,] GenerateRandomValues(int size)
-    {
-        int[, ,] ret = new int[size, size, size];
-
-        for (int i = 0; i < size; i++)
-        {
-            for (int j = 0; j < size; j++)
-            {
-                for (int k = 0; k < size; k++)
-                {
-                    ret[i, j, k] = Random.Range(0, 2);
-                }
+                if (sum > this.rules[2] || sum < this.rules[3]) actualValue[i] = 0;
             }
         }
 
-        return ret;
+        Debug.Log("TH" + index + " read ready");
+        this.readAndComputeReady[index].Set();
+        startWriting.WaitOne();
+
+        for (int i = 0; i < length; i++)
+        {
+            this.values[indices[i][0], indices[i][1], indices[i][2]] = actualValue[i];
+        }
+
+        Debug.Log("TH" + index + " write ready");
+        writeReady[index].Set();
+    }
+
+    // legenerálja a values tömb értékeit
+    private void GenerateRandomValues()
+    {
+        this.values = new int[this.size, this.size, this.size];
+        
+        for (int i = 0; i < this.size; i++)
+        {
+            for (int j = 0; j < this.size; j++)
+            {
+                for (int k = 0; k < this.size; k++)
+                {
+                    this.values[i, j, k] = Random.Range(0, 2);
+                }
+            }
+        }
+    }
+
+    // beállítja a decomposedValues offset és counter értékeket
+    private void DecomposeData()
+    {
+        this.decomposedValues = new int[this.threadCount, 2];
+
+        // kiszámoljuk, mennyi adat jut egy thread-re
+        // mivel nem feltétlenül osztható a thread-ek számával, az utolsóba tesszük a maradékot
+        int total = this.size * this.size * this.size;
+        int dataPerThread = total / (this.threadCount - 1);
+
+        for (int i = 0; i < this.threadCount - 1; i++)
+        {
+            // offset
+            this.decomposedValues[i,0] = i * dataPerThread;
+            // adatosszúság
+            this.decomposedValues[i,1] = dataPerThread;
+        }
+
+        // utolsó elem
+        this.decomposedValues[this.threadCount - 1, 0] = (this.threadCount - 1) * dataPerThread;
+        this.decomposedValues[this.threadCount - 1, 1] = total % this.threadCount;
     }
 
     // Sum: egy tórusz felépítést valósít meg, megadja az (i,j,k) koordinátákra,
@@ -149,5 +207,19 @@ public class ComputingThread {
     private int Mod(int x, int mod)
     {
         return (mod + x) % mod;
+    }
+
+    // egy lineáris indexbõl visszafejti a 3D indexet
+    // gyakorlatilag ugyanaz a feladat, mintha size alapú számrendszerben kéne felírni az index számot
+    // pl: linear = 859; size = 10 (10x10x10 kocka) -> { 8, 5, 9 }
+    private int[] Get3DIndex(int linear, int size)
+    {
+        int[] ret = new int[3];
+
+        ret[0] = (linear / (size * size)) % size;
+        ret[1] = (linear / size) % size;
+        ret[2] = linear % size;
+
+        return ret;
     }
 }
