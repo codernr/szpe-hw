@@ -58,6 +58,12 @@ public class Main : MonoBehaviour {
     {
         GameObject[,,] cubeArray = new GameObject[size, size, size];
 
+        int tw = Mathf.NextPowerOfTwo(this.size * this.size);
+        int th = Mathf.NextPowerOfTwo(this.size);
+        Texture2D tex = this.CreateTexture(tw, th);
+
+        Material material = this.CreateMaterial(tex);
+
         // ez alá tesszük a kockákat, hogy az inspectorban áttekinthetõ legyen
         Transform parent = GameObject.Find("Parent").transform;
 
@@ -84,9 +90,9 @@ public class Main : MonoBehaviour {
                     GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     cube.transform.parent = parent;
 
-                    // beállítunk nekik egy kicsit átlátszó, a teljes sokaság egyik sarkától a másikig
-                    // feketébõl fehérbe átmenõ színt
-                    cube.renderer.sharedMaterial.shader = Shader.Find("Self-Illumin/VertexLit");
+                    cube.renderer.sharedMaterial = material;
+                    Mesh mesh = cube.GetComponent<MeshFilter>().mesh;
+                    mesh.uv = this.GenerateUV(mesh.vertexCount, tw, th, i, j, k);
 
                     // ha nem 0 tartozik a kockához, akkor láthatatlan
                     cube.renderer.enabled = (values[i, j, k] == 1);
@@ -101,6 +107,48 @@ public class Main : MonoBehaviour {
         }
 
         return cubeArray;
+    }
+
+    // generálunk egy textúrát, ami colorpickerként fog mûködni az egyes kockák színeihez
+    // mindegyik pixele 1-1 kocka színe lesz
+    // végigjárjuk a teljes színskálát, tehát mindhárom irányban felosztjuk a kockaméretnek megfelelõen az RGB színeket
+    // pl ha 10x10x10-es kockánk van, akkor ez 2D-ben 10 darab 10X10-es négyzet lesz egymás mellett
+    private Texture2D CreateTexture(int w, int h)
+    {
+        Texture2D tex = new Texture2D(w, h);
+
+        for (int i = 0; i < this.size; i++)
+        {
+            for (int j = 0; j < this.size; j++)
+            {
+                for (int k = 0; k < this.size; k++)
+                {
+                    tex.SetPixel(((i * this.size) + j), k, new Color((float)i/(float)this.size, (float)j/(float)this.size, (float)k/(float)this.size, 1f)); 
+                }
+            }
+        }
+
+        tex.Apply();
+        return tex;
+    }
+
+    private Material CreateMaterial(Texture2D tex)
+    {
+        Material mat = new Material(Shader.Find("Self-Illumin/VertexLit"));
+        mat.mainTexture = tex;
+        return mat;
+    }
+
+    private Vector2[] GenerateUV(int length, int textureWidth, int textureHeight, int i, int j, int k)
+    {
+        Vector2[] uvs = new Vector2[length];
+
+        for (int uv = 0; uv < length; uv++)
+        {
+            uvs[uv] = new Vector2((float)((i * this.size) + j) / (float)textureWidth, (float)k / (float)textureHeight);
+        }
+
+        return uvs;
     }
 
     private void RefreshCubes(int size, int[, ,] values)
