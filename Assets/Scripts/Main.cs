@@ -21,6 +21,9 @@ public class Main : MonoBehaviour {
     public delegate void StartAnimation();
     public event StartAnimation starterEvent;
 
+    // kocka renderer tömb
+    private Renderer[, ,] renderers;
+
     // animáció idõtartama
     public float animationDuration = 0.3f;
     // két generáció közt eltelt idõ (!! nagyobbnak kell lennie mint az animációnak)
@@ -59,6 +62,7 @@ public class Main : MonoBehaviour {
         {
             this.starterEvent();
         }
+       this.RefreshCubes();
 
         yield return new WaitForSeconds(this.generationDuration);
         this.ct.StartThreads();
@@ -69,8 +73,9 @@ public class Main : MonoBehaviour {
     private IEnumerator GenerateCubes(int size, float space, int[,,] values)
     {
         this.loading = true;
+        this.renderers = new Renderer[size,size,size];
 
-        GameObject[,,] cubeArray = new GameObject[size, size, size];
+        //GameObject[,,] cubeArray = new GameObject[size, size, size];
 
         // a GPU azokat a textúrákat kezeli hatékonyan, amelyek 2 hatvány szélességû/hosszúságúak
         int tw = Mathf.NextPowerOfTwo(this.size * this.size);
@@ -103,10 +108,11 @@ public class Main : MonoBehaviour {
                 for (int k = 0; k < size; k++)
                 {
                     // létrehozzuk fizikailag a kockát
-                    GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    //GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    GameObject cube = Graphics.CreateCube(startPos + new Vector3(i * cubeSize, j * cubeSize, k * cubeSize), cubeSize);
                     cube.transform.parent = parent;
 
-                    cube.AddComponent<CubeAnimation>().Initialize(this, i, j, k);
+                    //cube.AddComponent<CubeAnimation>().Initialize(this, i, j, k);
 
                     // minden kocka ugyanazt a materialt használja, így lecsökken a draw call-ok száma
                     cube.renderer.sharedMaterial = material;
@@ -117,11 +123,13 @@ public class Main : MonoBehaviour {
                     // ha nem 0 tartozik a kockához, akkor láthatatlan
                     cube.renderer.enabled = (values[i, j, k] == 1);
 
-                    // méretezzük és a helyére tesszük a kockát
-                    cube.transform.localScale = new Vector3(cubeSize, cubeSize, cubeSize);
-                    cube.transform.position = startPos + new Vector3(i * cubeSize, j * cubeSize, k * cubeSize);
+                    this.renderers[i, j, k] = cube.renderer;
 
-                    cubeArray[i, j, k] = cube;
+                    // méretezzük és a helyére tesszük a kockát
+                    //cube.transform.localScale = new Vector3(cubeSize, cubeSize, cubeSize);
+                    //cube.transform.position = startPos + new Vector3(i * cubeSize, j * cubeSize, k * cubeSize);
+
+                    //cubeArray[i, j, k] = cube;
                 }
                 yield return null;
             }
@@ -170,6 +178,20 @@ public class Main : MonoBehaviour {
         }
 
         return uvs;
+    }
+
+    private void RefreshCubes()
+    {
+        for (int i = 0; i < size; i++)
+        {
+            for (int j = 0; j < size; j++)
+            {
+                for (int k = 0; k < size; k++)
+                {
+                    this.renderers[i, j, k].enabled = (this.ct.values[i, j, k] == 1);
+                }
+            }
+        }
     }
 
     void OnGUI()
