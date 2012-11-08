@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 using System.Threading;
 
 public class Main : MonoBehaviour {
@@ -13,9 +14,11 @@ public class Main : MonoBehaviour {
     // hány generációig fusson a program
     public int generation = 10;
 
-    // állapotjelzõ flagek
-    public bool loading = false;
-    public bool running = false;
+    // állapotjelzõ flagek, javarészt a GUI használja annak megállapítására, hogy mit kell kiírnia
+    public Dictionary<string, bool> state = new Dictionary<string, bool>
+    {
+        { "running", false }, { "loading", false }, { "start", true }, { "terminated", false }
+    };
 
     // kocka renderer tömb
     private Renderer[, ,] renderers;
@@ -25,21 +28,34 @@ public class Main : MonoBehaviour {
     
     // annak az objektumnak a referenciája, amibõl a szálakat indítjuk
     public ComputingThread ct;
+
+    // a guira kiírt log
+    private string log = "";
+
+    // GUI attribútumok
+    private Vector2 guiScrollPosition = Vector2.zero;
+    private GUIStyle style = new GUIStyle();
+
+    // log lock objektum
+    object logLock = new object();
     
     // Unity3d event, az induláskor van meghívva minden GameObject-hez csatolt scripten
 	public void Start ()
     {
-        this.ct = new ComputingThread(this.size);
-
-        this.StartCoroutine(this.GenerateCubes(this.size, this.space, this.ct.values));
+        // Debug.Log hívásakor ez a callback is meghívódik a log üzenettel
+        // ezzel íratjuk ki a képernyõre a logot
+        Application.RegisterLogCallbackThreaded(new Application.LogCallback(this.LogHandler));
+        Debug.Log("Application start");
 	}
 	
 	// Update is called once per frame
 	void Update () {
-        if (this.ct.threadComputeReady)
+        if (this.ct != null && this.ct.threadComputeReady)
         {
-            Debug.Log("SIKER");
             this.ct.threadComputeReady = false;
+
+            // jelzünk a GUInak, hogy engedje el a log scrollbar-ját
+            if (this.generation == 0 && !this.state["terminated"]) this.state["terminated"] = true;
 
             if (this.generation > 0)
             {
@@ -48,8 +64,8 @@ public class Main : MonoBehaviour {
                 // hogy kell-e tovább futniuk, ha nem, kilépnek
                 if (this.generation == 1) this.ct.terminated = true;
 
+                Debug.Log("GENERATION LEFT: " + this.generation);
                 this.generation--;
-                Debug.Log("GENERATION START: " + this.generation);
                 this.StartCoroutine(this.NewGeneration());
             }
         }
@@ -66,11 +82,13 @@ public class Main : MonoBehaviour {
         this.ct.startGeneration.Set();
     }
 
+    #region Graphics code
+
     // ez gyártja le a kockákat, amiket megjelenítünk
     // amelyiknél 0-t kell megjeleníteni, azt láthatatlanná tesszük
     private IEnumerator GenerateCubes(int size, float space, int[,,] values)
     {
-        this.loading = true;
+        this.state["loading"] = true;
         this.renderers = new Renderer[size,size,size];
 
         // a GPU azokat a textúrákat kezeli hatékonyan, amelyek 2 hatvány szélességû/hosszúságúak
@@ -106,6 +124,7 @@ public class Main : MonoBehaviour {
                     //GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     GameObject cube = Graphics.CreateCube(startPos + new Vector3(i * cubeSize, j * cubeSize, k * cubeSize), cubeSize);
                     cube.transform.parent = parent;
+                    cube.name = "C(" + i.ToString() + "," + j.ToString() + "," + k.ToString() + ")";
 
                     // minden kocka ugyanazt a materialt használja, így lecsökken a draw call-ok száma
                     cube.renderer.sharedMaterial = material;
@@ -122,7 +141,7 @@ public class Main : MonoBehaviour {
                 yield return null;
             }
         }
-        this.loading = false;
+        this.state["loading"] = false;
     }
 
     // generálunk egy textúrát, ami colorpickerként fog mûködni az egyes kockák színeihez
@@ -168,6 +187,7 @@ public class Main : MonoBehaviour {
         return uvs;
     }
 
+    // ez a kód állítja be, hogy látszik-e egy kocka, vagy nem
     private void RefreshCubes()
     {
         for (int i = 0; i < size; i++)
@@ -182,19 +202,72 @@ public class Main : MonoBehaviour {
         }
     }
 
+    #endregion
+
+    #region GUI
+
+    // GUI elemek kirajzolása
     void OnGUI()
     {
-        if (!this.running && !this.loading)
+        // indításkor megjelenítjük a GUI felületet, amin beállíthatunk egyet s mást
+        if (this.state["start"])
+        {
+            GUI.Label(new Rect(10, 10, 150, 20), "Kocka mérete:");
+            this.size = int.Parse(GUI.TextField(new Rect(160,10,50,20), this.size.ToString()));
+
+            GUI.Label(new Rect(10, 40, 150, 20), "Generációk száma:");
+            this.generation = int.Parse(GUI.TextField(new Rect(160, 40, 50, 20), this.generation.ToString()));
+
+            if (GUI.Button(new Rect(10, 70, 100, 20), "Generálás"))
+            {
+                this.state["start"] = false;
+                this.state["loading"] = true;
+
+                // létrehozzuk a szálkezelésért felelõs objektumot
+                this.ct = new ComputingThread(this.size);
+                // elindítjuk a kocka generálását
+                this.StartCoroutine(this.GenerateCubes(this.size, this.space, this.ct.values));
+            }
+
+            return;
+        }
+        
+        if (!this.state["running"] && !this.state["loading"])
         {
             if (GUI.Button(new Rect(10, 10, 50, 20), "Start"))
             {
-                this.running = true;
+                this.state["running"] = true;
                 this.ct.startGeneration.Set();
             }
         }
-        if (this.loading)
+        if (this.state["loading"])
         {
             GUI.Label(new Rect(10, 10, 100, 20), "Betöltés...");
+        }
+
+        // log ablak kiíratása
+        GUIContent content = new GUIContent(this.log);
+
+        float height = this.style.CalcHeight(content, 180f);
+
+        this.guiScrollPosition = this.state["terminated"] ? this.guiScrollPosition : new Vector2(0, height);
+        this.guiScrollPosition = GUI.BeginScrollView(new Rect(Screen.width - 210, 10, 200, 500), this.guiScrollPosition, new Rect(5,5,180,height));
+        
+        GUI.Label(new Rect(5, 5, 180, height), content);
+        GUI.EndScrollView();
+
+    }
+
+    #endregion
+
+    private void LogHandler(string condition, string stackTrace, LogType type)
+    {
+        if (type == LogType.Log)
+        {
+            lock (this.logLock)
+            {
+                this.log += condition + "\n";
+            }
         }
     }
 }

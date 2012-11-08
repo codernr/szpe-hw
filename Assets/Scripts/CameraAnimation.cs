@@ -13,7 +13,7 @@ public class CameraAnimation : MonoBehaviour {
 
     public void Update()
     {
-        if (this.main.running)
+        if (this.main.state["running"])
         {
             this.transform.RotateAround(Vector3.zero, Vector3.up, Time.deltaTime * this.rotationSpeed);
         }

@@ -85,6 +85,8 @@ public class ComputingThread {
 
     public void ComputingMainThread()
     {
+        Debug.Log("Main computing thread started");
+
         while (true)
         {
             WaitHandle.WaitAll(this.readAndComputeReady);
@@ -104,6 +106,11 @@ public class ComputingThread {
     {
         int index = (int)num;
 
+        Debug.Log("Thread #" + index + " started");
+
+        int offset = this.decomposedValues[index, 0];
+        int length = this.decomposedValues[index, 1];
+
         while (true)
         {
             // megvárja, míg elkezdheti a számolást
@@ -111,10 +118,6 @@ public class ComputingThread {
             this.startGeneration.WaitOne();
 
             // olvasási és számolási feladatok
-
-            int offset = this.decomposedValues[index, 0];
-            int length = this.decomposedValues[index, 1];
-
             int[] actualValue = new int[length];
             int[][] indices = new int[length][];
 
@@ -136,7 +139,7 @@ public class ComputingThread {
                 }
             }
 
-            Debug.Log("TH" + index + " read ready");
+            Debug.Log("Thread #" + index + " read ready");
             this.readAndComputeReady[index].Set();
             startWriting.WaitOne();
 
@@ -148,7 +151,7 @@ public class ComputingThread {
                 }
             }
 
-            Debug.Log("TH" + index + " write ready");
+            Debug.Log("Thread #" + index + " write ready");
             writeReady[index].Set();
 
             if (this.terminated) break;
