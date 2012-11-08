@@ -17,16 +17,10 @@ public class Main : MonoBehaviour {
     public bool loading = false;
     public bool running = false;
 
-    // egyes kockák animációját irányító esemény
-    public delegate void StartAnimation();
-    public event StartAnimation starterEvent;
-
     // kocka renderer tömb
     private Renderer[, ,] renderers;
 
-    // animáció idõtartama
-    public float animationDuration = 0.3f;
-    // két generáció közt eltelt idõ (!! nagyobbnak kell lennie mint az animációnak)
+    // két generáció közt eltelt idõ
     public float generationDuration = 1f;
     
     // annak az objektumnak a referenciája, amibõl a szálakat indítjuk
@@ -58,11 +52,7 @@ public class Main : MonoBehaviour {
 
     private IEnumerator NewGeneration()
     {
-       if (this.starterEvent != null)
-        {
-            this.starterEvent();
-        }
-       this.RefreshCubes();
+        this.RefreshCubes();
 
         yield return new WaitForSeconds(this.generationDuration);
         this.ct.StartThreads();
@@ -75,8 +65,6 @@ public class Main : MonoBehaviour {
         this.loading = true;
         this.renderers = new Renderer[size,size,size];
 
-        //GameObject[,,] cubeArray = new GameObject[size, size, size];
-
         // a GPU azokat a textúrákat kezeli hatékonyan, amelyek 2 hatvány szélességû/hosszúságúak
         int tw = Mathf.NextPowerOfTwo(this.size * this.size);
         int th = Mathf.NextPowerOfTwo(this.size);
@@ -86,7 +74,6 @@ public class Main : MonoBehaviour {
 
         // ez alá tesszük a kockákat, hogy az inspectorban áttekinthetõ legyen
         Transform parent = GameObject.Find("Parent").transform;
-        parent.GetComponent<ParentAnimation>().Initialize(this);
 
         // kiszámoljuk, mekkora lehet egy kocka, hogy beleférjenek az adott térbe
         float cubeSize = space / (float)size;
@@ -112,25 +99,18 @@ public class Main : MonoBehaviour {
                     GameObject cube = Graphics.CreateCube(startPos + new Vector3(i * cubeSize, j * cubeSize, k * cubeSize), cubeSize);
                     cube.transform.parent = parent;
 
-                    //cube.AddComponent<CubeAnimation>().Initialize(this, i, j, k);
-
                     // minden kocka ugyanazt a materialt használja, így lecsökken a draw call-ok száma
                     cube.renderer.sharedMaterial = material;
                     Mesh mesh = cube.GetComponent<MeshFilter>().mesh;
-                    // beállítjuk, hogy a material colorpicker-ként funkcionáló textúrájának megfelelõ pixelével legyen szaínezve
+                    // beállítjuk, hogy a material colorpicker-ként funkcionáló textúrájának megfelelõ pixelével legyen színezve
                     mesh.uv = this.GenerateUV(mesh.vertexCount, tw, th, i, j, k);
 
                     // ha nem 0 tartozik a kockához, akkor láthatatlan
                     cube.renderer.enabled = (values[i, j, k] == 1);
 
                     this.renderers[i, j, k] = cube.renderer;
-
-                    // méretezzük és a helyére tesszük a kockát
-                    //cube.transform.localScale = new Vector3(cubeSize, cubeSize, cubeSize);
-                    //cube.transform.position = startPos + new Vector3(i * cubeSize, j * cubeSize, k * cubeSize);
-
-                    //cubeArray[i, j, k] = cube;
                 }
+                // várunk egy frame-et, hogy látható legyen a kockák kirajzolásának folyamata
                 yield return null;
             }
         }

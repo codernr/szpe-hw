@@ -63,8 +63,6 @@ public class ComputingThread {
 
         this.DecomposeData();
 
-        int total = size * size * size;
-
         this.threads = new Thread[this.threadCount];
         this.readAndComputeReady = new AutoResetEvent[this.threadCount];
         this.writeReady = new AutoResetEvent[this.threadCount];
