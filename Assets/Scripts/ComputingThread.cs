@@ -11,6 +11,9 @@ public class ComputingThread {
 
     private object lockObject = new Object();
 
+    // ez dönti el, hogy kell-e a szálaknak futnia még
+    public bool terminated = false;
+
     // a szálakat tároló tömb
     public Thread[] threads;
     public int threadCount = 4;
@@ -27,6 +30,7 @@ public class ComputingThread {
 
     //azok az eventek, amikre a thread-ek várnak
     public ManualResetEvent startWriting = new ManualResetEvent(false);
+    public ManualResetEvent startGeneration = new ManualResetEvent(false);
 
     // flag, amit a unity-s szál folyamatosan pollingol, hogy kész-e a számítás
     private bool _threadComputeReady;
@@ -71,67 +75,86 @@ public class ComputingThread {
         {
             this.readAndComputeReady[i] = new AutoResetEvent(false);
             this.writeReady[i] = new AutoResetEvent(false);
-        }
-    }
 
-    // ez egy külön thread, ami további thread-eket indít, amelyek valójában számolnak
-    public void StartThreads()
-    {
-        for (int i = 0; i < threads.Length; i++)
-        {
             this.threads[i] = new Thread(this.ComputeGeneration);
             this.threads[i].Start(i);
         }
 
-        WaitHandle.WaitAll(this.readAndComputeReady);
-        this.startWriting.Set();
+        new Thread(ComputingMainThread).Start();
+    }
 
-        WaitHandle.WaitAll(this.writeReady);
-        this.startWriting.Reset();
+    public void ComputingMainThread()
+    {
+        while (true)
+        {
+            WaitHandle.WaitAll(this.readAndComputeReady);
+            this.startGeneration.Reset();
+            this.startWriting.Set();
 
-        this.threadComputeReady = true;
+            WaitHandle.WaitAll(this.writeReady);
+            this.startWriting.Reset();
+
+            this.threadComputeReady = true;
+            if (this.terminated) break;
+        }
+        Debug.Log("Main computing thread dies");
     }
 
     public void ComputeGeneration(object num)
     {
         int index = (int)num;
-        // olvasási és számolási feladatok
 
-        int offset = this.decomposedValues[index, 0];
-        int length = this.decomposedValues[index, 1];
-
-        int[] actualValue = new int[length];
-        int[][] indices = new int[length][];
-
-        for (int i = 0; i < length; i++)
+        while (true)
         {
-            indices[i] = this.Get3DIndex(i+offset, this.size);
+            // megvárja, míg elkezdheti a számolást
+            // a Main objektum jelez neki
+            this.startGeneration.WaitOne();
 
-            actualValue[i] = this.values[indices[i][0], indices[i][1], indices[i][2]];
+            // olvasási és számolási feladatok
 
-            int sum = this.Sum(indices[i][0], indices[i][1], indices[i][2]);
+            int offset = this.decomposedValues[index, 0];
+            int length = this.decomposedValues[index, 1];
 
-            if (actualValue[i] == 0)
+            int[] actualValue = new int[length];
+            int[][] indices = new int[length][];
+
+            for (int i = 0; i < length; i++)
             {
-                if (sum >= this.rules[0] && sum <= this.rules[1]) actualValue[i] = 1;
+                indices[i] = this.Get3DIndex(i + offset, this.size);
+
+                actualValue[i] = this.values[indices[i][0], indices[i][1], indices[i][2]];
+
+                int sum = this.Sum(indices[i][0], indices[i][1], indices[i][2]);
+
+                if (actualValue[i] == 0)
+                {
+                    if (sum >= this.rules[0] && sum <= this.rules[1]) actualValue[i] = 1;
+                }
+                else
+                {
+                    if (sum > this.rules[2] || sum < this.rules[3]) actualValue[i] = 0;
+                }
             }
-            else
+
+            Debug.Log("TH" + index + " read ready");
+            this.readAndComputeReady[index].Set();
+            startWriting.WaitOne();
+
+            lock (this.lockObject)
             {
-                if (sum > this.rules[2] || sum < this.rules[3]) actualValue[i] = 0;
+                for (int i = 0; i < length; i++)
+                {
+                    this.values[indices[i][0], indices[i][1], indices[i][2]] = actualValue[i];
+                }
             }
+
+            Debug.Log("TH" + index + " write ready");
+            writeReady[index].Set();
+
+            if (this.terminated) break;
         }
 
-        Debug.Log("TH" + index + " read ready");
-        this.readAndComputeReady[index].Set();
-        startWriting.WaitOne();
-
-        for (int i = 0; i < length; i++)
-        {
-            this.values[indices[i][0], indices[i][1], indices[i][2]] = actualValue[i];
-        }
-
-        Debug.Log("TH" + index + " write ready");
-        writeReady[index].Set();
+        Debug.Log("TH " + index + " dies");
     }
 
     // legenerálja a values tömb értékeit

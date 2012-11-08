@@ -43,6 +43,11 @@ public class Main : MonoBehaviour {
 
             if (this.generation > 0)
             {
+                // az utolsó generációnál jelezzük, hogy ezután vége a ciklusnak
+                // a végtelen ciklusban lévõ szálak minden ciklus végén ellenõrzik,
+                // hogy kell-e tovább futniuk, ha nem, kilépnek
+                if (this.generation == 1) this.ct.terminated = true;
+
                 this.generation--;
                 Debug.Log("GENERATION START: " + this.generation);
                 this.StartCoroutine(this.NewGeneration());
@@ -54,8 +59,11 @@ public class Main : MonoBehaviour {
     {
         this.RefreshCubes();
 
+        // két generáció közti váltás szünet
         yield return new WaitForSeconds(this.generationDuration);
-        this.ct.StartThreads();
+
+        // a számítást végzõ szálak megkapják az eventet, hogy kezdhetik a számolást
+        this.ct.startGeneration.Set();
     }
 
     // ez gyártja le a kockákat, amiket megjelenítünk
@@ -181,7 +189,7 @@ public class Main : MonoBehaviour {
             if (GUI.Button(new Rect(10, 10, 50, 20), "Start"))
             {
                 this.running = true;
-                this.ct.StartThreads();
+                this.ct.startGeneration.Set();
             }
         }
         if (this.loading)
