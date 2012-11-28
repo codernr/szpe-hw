@@ -5,6 +5,7 @@ using System.Threading;
 public class ComputingThread {
 
     // ebben tároljuk a tényleges tömböt, amiben az 1-0-k vannak
+    public object valuesLock = new object();
     public int[, ,] values;
 
     private int size;
@@ -24,8 +25,10 @@ public class ComputingThread {
     // pl. decomposedValues[0] = {0, 100} : a 0-dik thread a values tömb elsõ 100 elemével foglalkozik
     private int[,] decomposedValues;
 
-    //thread-ek jelzõ eventjei
+    //thread-ek jelzõ eventjei és lock objektumai
+    public object readAndComputeReadyLock = new object();
     public AutoResetEvent[] readAndComputeReady;
+    public object writeReadyLock = new object();
     public AutoResetEvent[] writeReady;
 
     //azok az eventek, amikre a thread-ek várnak
@@ -124,8 +127,10 @@ public class ComputingThread {
             for (int i = 0; i < length; i++)
             {
                 indices[i] = this.Get3DIndex(i + offset, this.size);
-
-                actualValue[i] = this.values[indices[i][0], indices[i][1], indices[i][2]];
+                lock (this.lockObject)
+                {
+                    actualValue[i] = this.values[indices[i][0], indices[i][1], indices[i][2]];
+                }
 
                 int sum = this.Sum(indices[i][0], indices[i][1], indices[i][2]);
 
@@ -140,7 +145,11 @@ public class ComputingThread {
             }
 
             Debug.Log("Thread #" + index + " read ready");
-            this.readAndComputeReady[index].Set();
+            lock (this.readAndComputeReadyLock)
+            {
+                this.readAndComputeReady[index].Set();
+            }
+
             startWriting.WaitOne();
 
             lock (this.lockObject)
@@ -152,7 +161,10 @@ public class ComputingThread {
             }
 
             Debug.Log("Thread #" + index + " write ready");
-            writeReady[index].Set();
+            lock (this.writeReadyLock)
+            {
+                writeReady[index].Set();
+            }
 
             if (this.terminated) break;
         }
